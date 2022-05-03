@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bjfu.community.dao.TagMapper">
+
+    <sql id = "selectFields">
+        id, name
+    </sql>
+
+    <sql id = "insertFields">
+       name
+    </sql>
+
+
+    <select id="selectById" resultType="Tag">
+        select id,name
+        from tag
+        where id = #{id}
+    </select>
+
+    <select id="selectByName" resultType="Tag">
+        select id,name
+        from tag
+        where name = #{name}
+    </select>
+
+    <select id="selectCount" resultType="int">
+        select count(id)
+        from tag
+    </select>
+
+    <select id="selectAllTags" resultType="Tag">
+        select id, name
+        from tag
+        limit #{offset}, #{limit}
+    </select>
+
+    <insert id="insertName" parameterType="Tag" keyProperty="id">
+        insert into tag (<include refid="insertFields"></include>)
+        values (#{name})
+    </insert>
+
+
+</mapper>

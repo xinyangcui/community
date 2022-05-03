@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bjfu.community.dao.TagAndDiscussPostMapper">
+
+    <sql id = "selectFields">
+        id, tag_id, post_id
+    </sql>
+
+    <sql id = "insertFields">
+        tag_id, post_id
+    </sql>
+
+    <select id="selectByPostId" resultType="TagAndDiscussPost">
+        select <include refid="selectFields"></include>
+        from tag_post
+        where post_id = #{postId}
+    </select>
+
+    <select id="selectByTagId" resultType="TagAndDiscussPost">
+        select <include refid="selectFields"></include>
+        from tag_post
+        where tag_id = #{tagId}
+    </select>
+
+    <select id="selectPostCountByTagId" resultType="int">
+        select count(id)
+        from tag_post
+        where tag_id = #{tagId}
+    </select>
+
+    <insert id="insertTagAndDiscussPost" parameterType="TagAndDiscussPost" keyProperty="id">
+        insert into tag_post(<include refid="insertFields"></include>)
+        values (#{tagId} , #{postId})
+    </insert>
+
+
+
+
+</mapper>
