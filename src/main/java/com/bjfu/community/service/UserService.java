@@ -1,21 +1,24 @@
 package com.bjfu.community.service;
 
+import com.bjfu.community.dao.LoginTicketMapper;
 import com.bjfu.community.dao.UserMapper;
+import com.bjfu.community.entity.LoginTicket;
 import com.bjfu.community.entity.User;
 import com.bjfu.community.util.CommunityConstant;
 import com.bjfu.community.util.CommunityUtil;
 import com.bjfu.community.util.MailClient;
+import com.bjfu.community.util.RedisKeyUtil;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.stereotype.Service;
 import org.thymeleaf.TemplateEngine;
 import org.thymeleaf.context.Context;
 
-import java.util.Date;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Random;
+import java.util.*;
+import java.util.concurrent.TimeUnit;
 
 @Service
 public class UserService implements CommunityConstant {
@@ -28,6 +31,14 @@ public class UserService implements CommunityConstant {
 
     @Autowired
     private TemplateEngine templateEngine;
+
+    @Autowired
+    private RedisTemplate redisTemplate;
+
+//    @Autowired
+//    private LoginTicketMapper loginTicketMapper;
+
+
 
     // 网站域名
     @Value("${community.path.domain}")
@@ -44,15 +55,13 @@ public class UserService implements CommunityConstant {
      * @return
      */
     public User findUserById (int id) {
-        return userMapper.selectById(id);
+//        return userMapper.selectById(id);
 
-        /*
         User user = getCache(id); // 优先从缓存中查询数据
         if (user == null) {
             user = initCache(id);
         }
         return user;
-         */
     }
 
     /**
@@ -167,13 +176,248 @@ public class UserService implements CommunityConstant {
         else if (user.getActivationCode().equals(code)) {
             // 修改用户状态为已激活
             userMapper.updateStatus(userId, 1);
-            //clearCache(userId); // 用户信息变更，清除缓存中的旧数据
+            clearCache(userId); // 用户信息变更，清除缓存中的旧数据
             return ACTIVATION_SUCCESS;
         }
         else {
             return ACTIVATION_FAILURE;
         }
     }
+
+
+    /**
+     * 用户登录（为用户创建凭证）
+     * @param username
+     * @param password
+     * @param expiredSeconds 多少秒后凭证过期
+     * @return Map<String, Object> 返回错误提示消息以及 ticket(凭证)
+     */
+    public Map<String, Object> login(String username, String password, int expiredSeconds) {
+        Map<String, Object> map = new HashMap<>();
+        // 空值处理
+        if (StringUtils.isBlank(username)) {
+            map.put("usernameMsg", "账号不能为空");
+            return map;
+        }
+        if (StringUtils.isBlank(password)) {
+            map.put("passwordMsg", "密码不能为空");
+            return map;
+        }
+
+        // 验证账号
+        User user = userMapper.selectByName(username);
+        if (user == null) {
+            map.put("usernameMsg", "该账号不存在");
+            return map;
+        }
+
+        // 验证状态
+        if (user.getStatus() == 0) {
+            // 账号未激活
+            map.put("usernameMsg", "该账号未激活");
+            return map;
+        }
+
+        // 验证密码,加密后比对
+        password = CommunityUtil.md5(password + user.getSalt());
+        if (!user.getPassword().equals(password)) {
+            map.put("passwordMsg", "密码错误");
+            return map;
+        }
+        // 用户名和密码均正确，为该用户生成登录凭证
+        LoginTicket loginTicket = new LoginTicket();
+        loginTicket.setUserId(user.getId());
+        loginTicket.setTicket(CommunityUtil.generateUUID()); // 随机凭证
+        loginTicket.setStatus(0); // 设置凭证状态为有效（当用户登出的时候，设置凭证状态为无效）
+        loginTicket.setExpired(new Date(System.currentTimeMillis() + expiredSeconds * 1000L)); // 设置凭证到期时间
+
+//        loginTicketMapper.insertLoginTicket(loginTicket);
+
+        // 将登录凭证存入 redis
+        String redisKey = RedisKeyUtil.getTicketKey(loginTicket.getTicket());
+        redisTemplate.opsForValue().set(redisKey, loginTicket);
+
+
+        map.put("ticket",loginTicket.getTicket());
+        return map;
+
+    }
+
+    /**
+     * 用户退出（将凭证状态设为无效）
+     * @param ticket
+     */
+    public void logout(String ticket) {
+
+        // 修改（先删除再插入）对应用户在 redis 中的凭证状态
+        String redisKey = RedisKeyUtil.getTicketKey(ticket);
+        LoginTicket loginTicket = (LoginTicket) redisTemplate.opsForValue().get(redisKey);
+        loginTicket.setStatus(1);
+        redisTemplate.opsForValue().set(redisKey, loginTicket);
+
+    }
+
+    /**
+     * 根据 ticket 查询 LoginTicket 信息
+     * @param ticket
+     * @return
+     */
+    public LoginTicket findLoginTicket(String ticket) {
+
+        String redisKey = RedisKeyUtil.getTicketKey(ticket);
+        return (LoginTicket) redisTemplate.opsForValue().get(redisKey);
+    }
+
+    /**
+     * 修改用户头像
+     * @param userId
+     * @param headUrl
+     * @return
+     */
+    public int updateHeader(int userId, String headUrl) {
+        int rows = userMapper.updateHeader(userId, headUrl);
+        clearCache(userId);
+        return rows;
+    }
+
+    /**
+     * 修改用户密码（对新密码加盐加密存入数据库）
+     * @param userId
+     * @param newPassword 新密码
+     * @return
+     */
+    public int updatePassword(int userId, String newPassword) {
+        User user = userMapper.selectById(userId);
+        // 重新加盐加密
+        newPassword = CommunityUtil.md5(newPassword + user.getSalt());
+        clearCache(userId);
+        return userMapper.updatePassword(userId, newPassword);
+    }
+
+
+    /**
+     * 优先从缓存中取值
+     * @param userId
+     * @return
+     */
+    private User getCache(int userId) {
+        String redisKey = RedisKeyUtil.getUserKey(userId);
+        return (User) redisTemplate.opsForValue().get(redisKey);
+    }
+
+    /**
+     * 缓存中没有该用户信息时，则将其存入缓存
+     * @param userId
+     * @return
+     */
+    private User initCache(int userId) {
+        User user = userMapper.selectById(userId);
+        String redisKey = RedisKeyUtil.getUserKey(userId);
+        redisTemplate.opsForValue().set(redisKey, user, 3600, TimeUnit.SECONDS);
+        return user;
+    }
+
+    /**
+     * 用户信息变更时清除对应缓存数据
+     * @param userId
+     */
+    private void clearCache(int userId) {
+        String redisKey = RedisKeyUtil.getUserKey(userId);
+        redisTemplate.delete(redisKey);
+    }
+
+    /**
+     * 获取某个用户的权限
+     * @param userId
+     * @return
+     */
+    public Collection<? extends GrantedAuthority> getAuthorities(int userId) {
+        User user = this.findUserById(userId);
+        List<GrantedAuthority> list = new ArrayList<>();
+        list.add(new GrantedAuthority() {
+            @Override
+            public String getAuthority() {
+                switch (user.getType()) {
+                    case 1:
+                        return AUTHORITY_ADMIN;
+                    case 2:
+                        return AUTHORITY_MODERATOR;
+                    default:
+                        return AUTHORITY_USER;
+                }
+            }
+        });
+        return list;
+    }
+
+    /**
+     * 发送邮箱验证码
+     * @param account 账户名, 目前是用户名
+     *
+     * @return Map<String, Object> 返回错误提示消息，如果返回的 map 为空，则说明发送验证码成功
+     */
+    public Map<String, Object> doSendEmailCode4ResetPwd(String account) {
+        Map<String, Object> map = new HashMap<>(2);
+        User user = userMapper.selectByName(account);
+        if (user == null) {
+            map.put("errMsg", "未发现账号");
+            return map;
+        }
+        final String email = user.getEmail();
+        if (StringUtils.isBlank(email)) {
+            map.put("errMsg", "该账号未绑定邮箱");
+            return map;
+        }
+
+        // 生成6位验证码
+        String randomCode = CommunityUtil.getRandomCode(6);
+        // 给注册用户发送激活邮件
+        Context context = new Context();
+        context.setVariable("email", "您的验证码是 " + randomCode);
+        // http://localhost:8080/community/activation/用户id/激活码
+        String url = domain + contextPath + "/activation/" + user.getId() + "/" + user.getActivationCode();
+        context.setVariable("url", url);
+        String content = templateEngine.process("/mail/activation", context);
+        mailClient.sendMail(email,"重置 Echo 账号密码", content);
+
+        final String redisKey = "EmailCode4ResetPwd:" + account;
+
+        redisTemplate.opsForValue().set(redisKey, randomCode, 600, TimeUnit.SECONDS);
+        return map;
+    }
+
+    /**
+     * 发送邮箱验证码
+     * @param account 账户名, 目前是用户名
+     *
+     * @return Map<String, Object> 返回错误提示消息，如果返回的 map 为空，则说明发送验证码成功
+     */
+    public Map<String, Object> doResetPwd(String account, String password) {
+        Map<String, Object> map = new HashMap<>(2);
+        if (StringUtils.isBlank(password)) {
+            map.put("errMsg", "密码不能为空");
+            return map;
+        }
+        User user = userMapper.selectByName(account);
+        if (user == null) {
+            map.put("errMsg", "未发现账号");
+            return map;
+        }
+        final String passwordEncode = CommunityUtil.md5(password + user.getSalt());
+        int i = userMapper.updatePassword(user.getId(), passwordEncode);
+        if (i <= 0) {
+            map.put("errMsg", "修改数据库密码错误");
+        } else {
+            clearCache(user.getId());
+        }
+        return map;
+    }
+
+
+
+
+
+
 
 
 

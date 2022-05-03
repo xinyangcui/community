@@ -2,9 +2,13 @@ package com.bjfu.community.controller;
 
 import com.bjfu.community.entity.DiscussPost;
 import com.bjfu.community.entity.Page;
+import com.bjfu.community.entity.Tag;
 import com.bjfu.community.entity.User;
 import com.bjfu.community.service.DiscussPostService;
+import com.bjfu.community.service.LikeService;
+import com.bjfu.community.service.TagService;
 import com.bjfu.community.service.UserService;
+import com.bjfu.community.util.CommunityConstant;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -23,13 +27,26 @@ import java.util.Map;
  */
 
 @Controller
-public class IndexController {
+public class IndexController implements CommunityConstant {
 
     @Autowired
     private UserService userService;
 
     @Autowired
     private DiscussPostService discussPostService;
+
+    @Autowired
+    private LikeService likeService;
+
+    @Autowired
+    private TagService tagService;
+
+
+    @GetMapping("/")
+    public String root() {
+        return "forward:/index";
+    }
+
 
     @GetMapping("/index")
     public String getIndexPage(Model model, Page page,@RequestParam(name = "orderMode", defaultValue = "0") int orderMode){
@@ -52,6 +69,13 @@ public class IndexController {
                 map.put("post", post);
                 User user = userService.findUserById(post.getUserId());
                 map.put("user", user);
+
+                long likeCount = likeService.findEntityLikeCount(ENTITY_TYPE_POST, post.getId());
+                map.put("likeCount", likeCount);
+
+                List<Tag> tagsList = tagService.findTagListByPostId(post.getId());
+                map.put("tagsList",tagsList);
+
                 discussPosts.add(map);
             }
         }
@@ -63,5 +87,22 @@ public class IndexController {
     }
 
 
+    /**
+     * 进入 500 错误界面
+     * @return
+     */
+    @GetMapping("/error")
+    public String getErrorPage() {
+        return "/error/500";
+    }
+
+    /**
+     * 没有权限访问时的错误界面（也是 404）
+     * @return
+     */
+    @GetMapping("/denied")
+    public String getDeniedPage() {
+        return "/error/404";
+    }
 
 }

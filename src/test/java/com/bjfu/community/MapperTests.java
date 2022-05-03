@@ -1,20 +1,21 @@
 package com.bjfu.community;
 
-import com.bjfu.community.dao.DiscussPostMapper;
-import com.bjfu.community.dao.UserMapper;
-import com.bjfu.community.entity.DiscussPost;
-import com.bjfu.community.entity.User;
-import org.junit.jupiter.api.Test;
+import com.bjfu.community.dao.*;
+import com.bjfu.community.entity.*;
 
+
+import org.junit.Test;
+import org.junit.runner.RunWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ContextConfiguration;
+import org.springframework.test.context.junit4.SpringRunner;
 
 
 import java.util.Date;
 import java.util.List;
 
-
+@RunWith(SpringRunner.class)
 @SpringBootTest
 @ContextConfiguration(classes = CommunityApplication.class)
 public class MapperTests {
@@ -24,6 +25,15 @@ public class MapperTests {
 
     @Autowired
     private DiscussPostMapper discussPostMapper;
+    @Autowired
+    private LoginTicketMapper loginTicketMapper;
+
+    @Autowired
+    private TagMapper tagMapper;
+
+    @Autowired
+    private TagAndDiscussPostMapper tagAndDiscussPostMapper;
+
 
 
     @Test
@@ -78,6 +88,52 @@ public class MapperTests {
         System.out.println(rows);
 
     }
+
+    @Test
+    public void testInsertTicket(){
+        LoginTicket loginTicket=new LoginTicket();
+        loginTicket.setUserId(101);
+        loginTicket.setStatus(0);
+        loginTicket.setTicket("abc");
+        loginTicket.setExpired(new Date(System.currentTimeMillis() + 1000*60*10));
+
+        loginTicketMapper.insertLoginTicket(loginTicket);
+
+    }
+    @Test
+    public void testSelectLoginTicket(){
+        LoginTicket loginTicket=loginTicketMapper.selectByTicket("abc");
+        System.out.println(loginTicket);
+
+        loginTicketMapper.updateStatus("abc",1);
+        loginTicket=loginTicketMapper.selectByTicket("abc");
+        System.out.println(loginTicket);
+
+    }
+
+    @Test
+    public void testSelect(){
+        TagAndDiscussPost tap = new TagAndDiscussPost();
+        tap.setTagId(2);
+        tap.setPostId(5);
+        int rows = tagAndDiscussPostMapper.insertTagAndDiscussPost(tap);
+
+        List<TagAndDiscussPost> list = tagAndDiscussPostMapper.selectByTagId(2);
+        for(TagAndDiscussPost tagAndDiscussPost:list){
+            System.out.println(tagAndDiscussPost.getPostId());
+        }
+
+        list = tagAndDiscussPostMapper.selectByPostId(1);
+        for(TagAndDiscussPost tagAndDiscussPost:list){
+            System.out.println(tagAndDiscussPost.getTagId());
+        }
+
+
+
+
+
+    }
+
 
 
 }

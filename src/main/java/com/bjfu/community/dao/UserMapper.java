@@ -4,8 +4,6 @@ package com.bjfu.community.dao;
 import com.bjfu.community.entity.User;
 import org.apache.ibatis.annotations.Mapper;
 
-
-
 @Mapper
 public interface UserMapper {
 

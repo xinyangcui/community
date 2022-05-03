@@ -3,11 +3,17 @@
 <head>
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-	<link rel="icon" href="https://static.nowcoder.com/images/logo_87_87.png"/>
-	<link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" crossorigin="anonymous">
+	<link rel="icon" type="shortcut icon" th:href="@{/img/favicon.ico}" />
+	<link rel="stylesheet" type="text/css" th:href="@{/css/bootstrap.min.css}" />
 	<link rel="stylesheet" type="text/css" th:href="@{/css/global.css}" />
 	<link rel="stylesheet" type="text/css" th:href="@{/css/login.css}" />
-	<title>牛客网-注册</title>
+	<!-- Font Awesome icons (free version)-->
+	<script src="https://use.fontawesome.com/releases/v6.1.0/js/all.js" crossorigin="anonymous"></script>
+	<!-- Google fonts-->
+	<link href="https://fonts.googleapis.com/css?family=Lora:400,700,400italic,700italic" rel="stylesheet" type="text/css" />
+	<link href="https://fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,600italic,700italic,800italic,400,300,600,700,800" rel="stylesheet" type="text/css" />
+
+	<title>Echo-注册</title>
 </head>
 <body>
 	<div class="nk-container">
@@ -44,6 +50,11 @@
 					<div class="form-group row mt-4">
 						<label for="confirm-password" class="col-sm-2 col-form-label text-right">确认密码:</label>
 						<div class="col-sm-10">
+							<!--
+							<input type="password" class="form-control" id="confirm-password" onkeyup="validate()"
+								   th:value="${user!=null ? user.password : ''}"
+								   placeholder="请再次输入密码!" required><span id="tishi"></span></p>
+								   -->
 							<input type="password" class="form-control" id="confirm-password"
 								   th:value="${user!=null ? user.password : ''}"
 								   placeholder="请再次输入密码!" required>
@@ -75,10 +86,25 @@
 		<!-- 尾部 -->
 		<footer class="bg-dark" th:replace="index::footer"></footer>
 	</div>
+	<script>
+		function validate() {
+			var pw1 = document.getElementById("password").value;
+			var pw2 = document.getElementById("confirm-password").value;
+			if(pw1 == pw2) {
+				document.getElementById("tishi").innerHTML="";
+				document.getElementById("submit").disabled = false;
+			}
+			else {
+				document.getElementById("tishi").innerHTML="<font color='red'>两次密码不相同</font>";
+				document.getElementById("submit").disabled = true;
+			}
+		}
+	</script>
 
-	<script src="https://code.jquery.com/jquery-3.3.1.min.js" crossorigin="anonymous"></script>
-	<script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js" crossorigin="anonymous"></script>
-	<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js" crossorigin="anonymous"></script>
+
+	<script th:src="@{/js/jquery-3.1.0.min.js}"></script>
+	<script th:src="@{/js/popper.min.js}"></script>
+	<script th:src="@{/js/bootstrap.min.js}"></script>
 	<script th:src="@{/js/global.js}"></script>
 	<script th:src="@{/js/register.js}"></script>
 </body>
